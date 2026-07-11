@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bow-Tie PCB Antenna Designer — Parametric 3D + Rough S11 Estimate</title>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #12141a; color: #e8e8ea; height: 100vh; display: flex; flex-direction: column;
+  }
+  header { padding: 10px 18px; border-bottom: 1px solid #2a2d36; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header span { font-size: 12px; color: #9a9ea8; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #viewer3d { flex: 1.15; position: relative; border-right: 1px solid #2a2d36; }
+  #viewer3d canvas { display: block; }
+  .panel-right { flex: 1; display: flex; flex-direction: column; min-width: 380px; }
+  #chartWrap { flex: 1.1; padding: 14px 18px 4px; min-height: 0; }
+  #chartWrap canvas { max-height: 100%; }
+  #controls { padding: 10px 18px 16px; border-top: 1px solid #2a2d36; overflow-y: auto; max-height: 48vh; }
+  .row { display: grid; grid-template-columns: 160px 1fr 64px; gap: 10px; align-items: center; margin: 9px 0; }
+  .row label { font-size: 12.5px; color: #c7cad2; }
+  .row input[type=range] { width: 100%; accent-color: #ff8a5b; }
+  .row .val { font-size: 12px; color: #9a9ea8; text-align: right; font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 6px 18px 0; }
+  .stat { background: #1a1d25; border: 1px solid #2a2d36; border-radius: 8px; padding: 8px 12px; }
+  .stat .k { font-size: 10.5px; color: #8b8f99; text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .stat .v.good { color: #59d17e; }
+  .stat .v.bad { color: #ff6767; }
+  footer { padding: 6px 18px 10px; font-size: 11px; color: #6c707a; border-top: 1px solid #2a2d36; }
+  footer a { color: #8fb4ff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bow-Tie PCB Antenna Designer</h1>
+  <span>Parametric 3D model + semi-empirical S11 estimate calibrated to published CST sweep data (Smith &amp; Lim, <i>Appl. Sci.</i> 2024, 14, 9555) — rough estimate only, not a CST-accuracy solve</span>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="k">Resonant f₀ (est.)</div><div class="v" id="statF0">—</div></div>
+  <div class="stat"><div class="k">S11 @ target freq</div><div class="v" id="statS11">—</div></div>
+  <div class="stat"><div class="k">Approx. bandwidth</div><div class="v" id="statBW">—</div></div>
+</div>
+
+<main>
+  <div id="viewer3d"></div>
+  <div class="panel-right">
+    <div id="chartWrap"><canvas id="s11Chart"></canvas></div>
+    <div id="controls">
+      <div class="row">
+        <label for="freq">Target frequency (GHz)</label>
+        <input type="range" id="freq" min="0.8" max="4" step="0.01" value="2.45">
+        <div class="val" id="freqVal">2.45</div>
+      </div>
+      <div class="row">
+        <label for="alpha">Flare angle &alpha; (deg)</label>
+        <input type="range" id="alpha" min="40" max="160" step="1" value="90">
+        <div class="val" id="alphaVal">90</div>
+      </div>
+      <div class="row">
+        <label for="r">Flare radius r (mm)</label>
+        <input type="range" id="r" min="15" max="100" step="0.5" value="21">
+        <div class="val" id="rVal">21.0</div>
+      </div>
+      <div class="row">
+        <label for="gap">Feed gap (mm)</label>
+        <input type="range" id="gap" min="0.2" max="6" step="0.1" value="1">
+        <div class="val" id="gapVal">1.0</div>
+      </div>
+      <div class="row">
+        <label for="epsr">PCB/substrate &epsilon;r</label>
+        <input type="range" id="epsr" min="1" max="4.4" step="0.05" value="1.45">
+        <div class="val" id="epsrVal">1.45</div>
+      </div>
+      <div class="row">
+        <label for="h">Substrate thickness (mm)</label>
+        <input type="range" id="h" min="0.05" max="3" step="0.01" value="0.2">
+        <div class="val" id="hVal">0.20</div>
+      </div>
+      <div class="row">
+        <label for="z0">Feed line Z₀ (&Omega;)</label>
+        <input type="range" id="z0" min="30" max="90" step="1" value="50">
+        <div class="val" id="z0Val">50</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Model: planar bow-tie, two mirrored circular-sector wings of flare angle &alpha; and radius r. Resonant frequency and edge resistance are interpolated from CST-simulated data points at r=50mm, &alpha;=40&deg;/80&deg;/120&deg;/160&deg; (<a href="#" onclick="return false">Smith &amp; Lim, 2024, Table 1</a>), combined with the paper's validated f&#8320;&#8733;1/r scaling law (checked against their &alpha;=160&deg; flare-radius sweep, Figure 4). Substrate loading is a simple bulk &epsilon;<sub>eff</sub>=(&epsilon;r+1)/2 correction. Good for rough sizing/trend estimates only over &alpha;&isin;[40&deg;,160&deg;] &mdash; verify final design in CST before submission.
+</footer>
+
+<script>
+// ===================== Semi-empirical bow-tie S11 model =====================
+// Calibration data: Smith & Lim (2024), Table 1 (r = 50 mm) and Figure 4 (alpha = 160deg, varying r)
+const CAL = {
+  alphaDeg: [40, 80, 120, 160],
+  f0GHz_at_r50: [1.16, 1.18, 1.36, 1.72],
+  Rin: [56.7, 41.2, 18.4, 4.1],
+  // Q derived from measured -10dB fractional BW at alpha=40 (20%) and alpha=80 (22%),
+  // linearly extrapolated (decreasing Q / broadening bandwidth) toward higher flare angles.
+  Q_anchor_alpha: [40, 80],
+  Q_anchor: [1/0.20, 1/0.22]
+};
+
+function lerpTable(x, xs, ys){
+  if (x <= xs[0]) return ys[0] + (ys[1]-ys[0]) * (x-xs[0])/(xs[1]-xs[0]);
+  for (let i = 0; i < xs.length-1; i++){
+    if (x >= xs[i] && x <= xs[i+1]){
+      const t = (x - xs[i]) / (xs[i+1]-xs[i]);
+      return ys[i] + t*(ys[i+1]-ys[i]);
+    }
+  }
+  const n = xs.length;
+  return ys[n-2] + (ys[n-1]-ys[n-2]) * (x-xs[n-2])/(xs[n-1]-xs[n-2]);
+}
+
+function estimateQ(alphaDeg){
+  const [a0,a1] = CAL.Q_anchor_alpha;
+  const [q0,q1] = CAL.Q_anchor;
+  const slope = (q1-q0)/(a1-a0);
+  const q = q0 + slope*(alphaDeg - a0);
+  return Math.max(q, 2.0);
+}
+
+function computeBowtie(params){
+  const { freqGHz, alphaDeg, r_mm, epsr, Z0 } = params;
+
+  const f0_bare_GHz_r50 = lerpTable(alphaDeg, CAL.alphaDeg, CAL.f0GHz_at_r50);
+  const Rin = lerpTable(alphaDeg, CAL.alphaDeg, CAL.Rin);
+  const Q = estimateQ(alphaDeg);
+
+  // Validated 1/r scaling law (matches paper's Figure 4 flare-radius sweep to within ~1%)
+  const f0_bare_GHz = f0_bare_GHz_r50 * (50 / r_mm);
+
+  // Bulk dielectric loading correction for the PCB/flexible substrate
+  const epsEff = (epsr + 1) / 2;
+  const f0GHz = f0_bare_GHz / Math.sqrt(epsEff);
+  const f0 = f0GHz * 1e9;
+
+  function Zin(fHz){
+    const im = Q * (fHz/f0 - f0/fHz);
+    const denomMagSq = 1 + im*im;
+    return { re: Rin/denomMagSq, im: -Rin*im/denomMagSq };
+  }
+  function s11dB(fHz){
+    const z = Zin(fHz);
+    const numRe = z.re - Z0, numIm = z.im;
+    const denRe = z.re + Z0, denIm = z.im;
+    const gammaMag = Math.sqrt((numRe*numRe+numIm*numIm)/(denRe*denRe+denIm*denIm));
+    return 20*Math.log10(Math.max(gammaMag, 1e-6));
+  }
+
+  const span = f0 * 0.9;
+  const nPts = 260;
+  const freqs = [], s11 = [];
+  for (let i = 0; i <= nPts; i++){
+    const fHz = Math.max(f0 - span/2, 0.1e9) + span * i/nPts;
+    freqs.push(fHz/1e9);
+    s11.push(s11dB(fHz));
+  }
+
+  let bwLow = null, bwHigh = null;
+  for (let i = 0; i < s11.length; i++){
+    if (s11[i] <= -10){ if (bwLow === null) bwLow = freqs[i]; bwHigh = freqs[i]; }
+  }
+  const bwMHz = (bwLow !== null) ? (bwHigh - bwLow) * 1000 : 0;
+
+  return { f0GHz, Rin, Q, freqs, s11, s11AtTarget: s11dB(freqGHz*1e9), bwMHz };
+}
+
+// ===================== UI wiring =====================
+const ids = ['freq','alpha','r','gap','epsr','h','z0'];
+const state = {};
+function readState(){
+  state.freqGHz = +document.getElementById('freq').value;
+  state.alphaDeg = +document.getElementById('alpha').value;
+  state.r_mm    = +document.getElementById('r').value;
+  state.gap_mm  = +document.getElementById('gap').value;
+  state.epsr    = +document.getElementById('epsr').value;
+  state.h_mm    = +document.getElementById('h').value;
+  state.Z0      = +document.getElementById('z0').value;
+}
+const fmt = (id, digits) => document.getElementById(id+'Val').textContent = (+document.getElementById(id).value).toFixed(digits);
+
+ids.forEach(id => document.getElementById(id).addEventListener('input', update));
+
+// ===================== Chart.js S11 plot =====================
+const ctx = document.getElementById('s11Chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    { label: 'S11 (dB)', data: [], borderColor: '#ff8a5b', borderWidth: 2, pointRadius: 0, tension: 0.15 }
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    scales: {
+      x: { title: { display: true, text: 'Frequency (GHz)', color: '#9a9ea8' }, ticks: { color: '#9a9ea8', maxTicksLimit: 8 }, grid: { color: '#22252d' } },
+      y: { title: { display: true, text: 'S11 (dB)', color: '#9a9ea8' }, min: -35, max: 0, ticks: { color: '#9a9ea8' }, grid: { color: '#22252d' } }
+    },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ===================== Three.js 3D parametric bow-tie viewer =====================
+const container = document.getElementById('viewer3d');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12141a);
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 2000);
+camera.position.set(0, 60, 130);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(container.clientWidth, container.clientHeight);
+container.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0,0,0);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(60,100,60);
+scene.add(dirLight);
+scene.add(new THREE.GridHelper(220, 22, 0x333844, 0x22252d));
+
+const grp = new THREE.Group();
+scene.add(grp);
+
+function wedgeShape(alphaRad, r){
+  // Sector shape (apex at origin), bisector pointing toward +Y (i.e. "up" in the shape's local 2D plane)
+  const half = alphaRad/2;
+  const shape = new THREE.Shape();
+  shape.moveTo(0,0);
+  const nSeg = 48;
+  for (let i = 0; i <= nSeg; i++){
+    const a = -half + (2*half)*(i/nSeg) + Math.PI/2; // center the arc on +Y (90deg)
+    shape.lineTo(r*Math.cos(a), r*Math.sin(a));
+  }
+  shape.lineTo(0,0);
+  return shape;
+}
+
+function rebuild3D(p){
+  grp.clear();
+  const alphaRad = p.alphaDeg * Math.PI/180;
+  const copperThickness = 0.05; // mm, purely visual
+  const halfGap = p.gap_mm/2;
+
+  // substrate slab
+  const subSize = p.r_mm * 2.4;
+  const subGeo = new THREE.BoxGeometry(subSize, p.h_mm, subSize);
+  const subMat = new THREE.MeshStandardMaterial({ color: 0x2f4a6b, transparent: true, opacity: 0.5, roughness: 0.8 });
+  const subMesh = new THREE.Mesh(subGeo, subMat);
+  subMesh.position.y = -p.h_mm/2 - copperThickness/2;
+  grp.add(subMesh);
+
+  const copperMat = new THREE.MeshStandardMaterial({ color: 0xd4924a, metalness: 0.55, roughness: 0.35 });
+  const extrudeSettings = { depth: copperThickness, bevelEnabled: false };
+
+  // top wing: shape drawn in XY plane (bisector +Y), extruded along Z, then rotated flat (rotateX -90deg)
+  // so the wing lies in the XZ (horizontal) plane with its bisector along +Z, apex at origin
+  const shape = wedgeShape(alphaRad, p.r_mm);
+  const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  geo.rotateX(-Math.PI/2);
+
+  const topWing = new THREE.Mesh(geo, copperMat);
+  topWing.position.z = halfGap;
+  grp.add(topWing);
+
+  const bottomWing = new THREE.Mesh(geo.clone(), copperMat);
+  bottomWing.rotation.y = Math.PI; // mirror to point the opposite direction
+  bottomWing.position.z = -halfGap;
+  grp.add(bottomWing);
+
+  // feed markers
+  const feedGeo = new THREE.CylinderGeometry(0.9, 0.9, p.h_mm + copperThickness*2 + 1, 16);
+  const feedMat = new THREE.MeshStandardMaterial({ color: 0xffe066 });
+  const feedTop = new THREE.Mesh(feedGeo, feedMat);
+  feedTop.position.set(0, 0, halfGap);
+  grp.add(feedTop);
+  const feedBottom = new THREE.Mesh(feedGeo.clone(), feedMat);
+  feedBottom.position.set(0, 0, -halfGap);
+  grp.add(feedBottom);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = container.clientWidth/container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+});
+
+// ===================== main update loop =====================
+function update(){
+  fmt('freq',2); fmt('r',1); fmt('gap',1); fmt('epsr',2); fmt('h',2);
+  document.getElementById('alphaVal').textContent = document.getElementById('alpha').value;
+  document.getElementById('z0Val').textContent = document.getElementById('z0').value;
+
+  readState();
+  rebuild3D(state);
+
+  const result = computeBowtie(state);
+
+  chart.data.labels = result.freqs.map(f => f.toFixed(3));
+  chart.data.datasets[0].data = result.s11;
+  chart.update('none');
+
+  document.getElementById('statF0').textContent = result.f0GHz.toFixed(3) + ' GHz';
+  const s11El = document.getElementById('statS11');
+  s11El.textContent = result.s11AtTarget.toFixed(1) + ' dB';
+  s11El.className = 'v ' + (result.s11AtTarget <= -10 ? 'good' : 'bad');
+  document.getElementById('statBW').textContent = result.bwMHz > 0 ? result.bwMHz.toFixed(0) + ' MHz' : '< -10dB not reached';
+}
+
+update();
+</script>
+</body>
+</html>

@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Operation Bow-Tie</title>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0d0f14; color:#e8e8ea; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; overflow-x:hidden; }
+  a { color:#8fb4ff; }
+  .scene { display:none; min-height:100vh; }
+  .scene.active { display:flex; flex-direction:column; }
+
+  /* ---------- Start scene ---------- */
+  #scene-start { align-items:center; justify-content:center; text-align:center; background:
+    radial-gradient(circle at 30% 20%, #1c2130 0%, #0d0f14 60%); padding:24px; }
+  #scene-start h1 { font-size:44px; margin:0 0 10px; }
+  #scene-start h1 span { color:#ff8a5b; }
+  #scene-start p.tag { color:#9a9ea8; font-size:16px; margin-bottom:36px; }
+  .bigbtn {
+    background:#ff8a5b; color:#1a1200; border:none; border-radius:14px; padding:18px 40px;
+    font-size:18px; font-weight:700; cursor:pointer; box-shadow:0 8px 30px rgba(255,138,91,.25);
+    transition:transform .15s ease;
+  }
+  .bigbtn:hover { transform:translateY(-2px); }
+
+  /* ---------- Story scenes ---------- */
+  .story-wrap { max-width:680px; margin:0 auto; padding:70px 24px; width:100%; }
+  .story-wrap .emoji-big { font-size:56px; text-align:center; margin-bottom:14px; }
+  .story-wrap h2 { font-size:26px; text-align:center; margin:0 0 8px; }
+  .story-wrap p.lede { color:#9a9ea8; text-align:center; margin:0 0 34px; font-size:15px; }
+  .options { display:flex; flex-direction:column; gap:12px; margin-bottom:24px; }
+  .opt {
+    background:#1a1d25; border:1px solid #2a2d36; border-radius:12px; padding:16px 18px;
+    color:#e8e8ea; font-size:15px; text-align:left; cursor:pointer; transition:all .15s ease;
+  }
+  .opt:hover { border-color:#ff8a5b; background:#20242f; }
+  .opt:disabled { opacity:.45; cursor:default; }
+  .reveal { display:none; background:linear-gradient(135deg,#1c2130,#171a22); border:1px solid #2a2d36;
+    border-radius:14px; padding:20px 22px; margin:10px 0 26px; font-size:15px; line-height:1.6; color:#d7dae0; }
+  .reveal.show { display:block; }
+  .reveal .tag { display:inline-block; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#ff8a5b; font-weight:700; margin-bottom:8px; }
+  .continueBtn { display:none; margin:0 auto; }
+  .continueBtn.show { display:block; }
+  .progress { display:flex; gap:6px; justify-content:center; margin-bottom:30px; }
+  .progress i { width:26px; height:4px; border-radius:2px; background:#2a2d36; }
+  .progress i.done { background:#ff8a5b; }
+
+  /* ---------- Picker scene ---------- */
+  #scene-picker .story-wrap { max-width:980px; }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:10px; }
+  .card {
+    background:#1a1d25; border:1px solid #2a2d36; border-radius:16px; padding:22px 18px; cursor:pointer;
+    transition:all .18s ease; text-align:center;
+  }
+  .card:hover { border-color:#ff8a5b; transform:translateY(-4px); }
+  .card .icon { font-size:40px; margin-bottom:10px; }
+  .card h3 { margin:0 0 8px; font-size:17px; }
+  .card p { margin:0; font-size:13px; color:#9a9ea8; line-height:1.5; }
+
+  /* ---------- Lab scene ---------- */
+  #scene-lab { padding:0; }
+  .labhead { padding:20px 24px 8px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #2a2d36; }
+  .labhead h2 { margin:0; font-size:19px; }
+  .labhead .backbtn { background:none; border:1px solid #3a3d46; color:#c7cad2; border-radius:8px; padding:8px 14px; cursor:pointer; font-size:12.5px; }
+  #verdictWrap { padding:14px 24px 0; max-width:1400px; margin:0 auto; width:100%; }
+  .banner { border-radius:10px; padding:12px 18px; font-size:14px; font-weight:600; border:1px solid #2a2d36; }
+  .banner.win { background:#123322; border-color:#1e5c3c; color:#6ee6a0; }
+  .banner.warm { background:#332a12; border-color:#6b5420; color:#ffd166; }
+  .banner.cold { background:#241318; border-color:#5c1e2c; color:#ff8fa3; }
+  .stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:12px 24px 0; max-width:1352px; margin-inline:auto; }
+  .stat { background:#1a1d25; border:1px solid #2a2d36; border-radius:10px; padding:10px 14px; }
+  .stat .k { font-size:10.5px; color:#8b8f99; text-transform:uppercase; letter-spacing:.04em; }
+  .stat .v { font-size:18px; font-weight:700; margin-top:2px; }
+  .stat .v.good { color:#59d17e; }
+  .stat .v.bad { color:#ff6767; }
+
+  main.lab { max-width:1400px; margin:0 auto; padding:16px 24px 30px; display:grid; grid-template-columns: 1.05fr 1fr; gap:18px; width:100%; }
+  .col { display:flex; flex-direction:column; gap:14px; }
+  #viewer3d { border:1px solid #2a2d36; border-radius:12px; overflow:hidden; height:360px; position:relative; }
+  #viewer3d canvas { display:block; }
+  #chartWrap { border:1px solid #2a2d36; border-radius:12px; padding:14px 18px 4px; height:280px; }
+  #chartWrap canvas { max-height:100%; }
+
+  .arena-box { border:1px solid #2a2d36; border-radius:12px; padding:16px; }
+  .arena-box h4 { margin:0 0 4px; font-size:13.5px; color:#c7cad2; }
+  .arena-box .sub { margin:0 0 10px; font-size:11.5px; color:#6c707a; }
+  .arena-stage { position:relative; width:280px; height:280px; margin:0 auto; }
+  #arena3d { width:280px; height:280px; border-radius:10px; outline:none; border:2px solid #2a2d36; cursor:pointer; }
+  #arena3d:focus { border-color:#ff8a5b; }
+  .axislabel { position:absolute; font-size:10.5px; color:#8b8f99; text-align:center; pointer-events:none; }
+  .axislabel.top { top:-16px; left:0; right:0; }
+  .axislabel.bottom { bottom:-16px; left:0; right:0; }
+  .axislabel.left { left:-70px; top:0; bottom:0; width:64px; display:flex; align-items:center; justify-content:flex-end; }
+  .axislabel.right { right:-70px; top:0; bottom:0; width:64px; display:flex; align-items:center; }
+  .arena-hint { text-align:center; font-size:12px; color:#6c707a; margin-top:20px; }
+  .arena-hint b { color:#6ee6a0; }
+  .arena-hud { display:flex; justify-content:space-between; margin-top:10px; font-size:12.5px; color:#d7dae0; font-variant-numeric:tabular-nums; }
+
+  /* ---------- Rotary dials ---------- */
+  .dials { border:1px solid #2a2d36; border-radius:12px; padding:16px 18px; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .dialUnit { display:flex; flex-direction:column; align-items:center; gap:6px; user-select:none; }
+  .dialUnit .dial { width:64px; height:64px; border-radius:50%; position:relative; cursor:grab; touch-action:none;
+    background:conic-gradient(var(--dc,#ff8a5b) calc(var(--pct,50)*1%), #23262f 0); }
+  .dialUnit .dial:active { cursor:grabbing; }
+  .dialUnit .dial::after { content:''; position:absolute; inset:9px; border-radius:50%; background:#12141a; }
+  .dialUnit .dial .pointer {
+    position:absolute; width:3px; height:20px; background:#fff; left:50%; top:5px;
+    transform-origin:50% 27px; transform:translateX(-50%) rotate(calc(var(--pct,50)*3.6deg)); border-radius:2px; z-index:2;
+  }
+  .dialUnit .dlabel { font-size:11px; color:#c7cad2; text-align:center; }
+  .dialUnit .dval { font-size:12px; font-weight:700; color:#f0f1f3; font-variant-numeric:tabular-nums; }
+
+  footer.labfoot { max-width:1400px; margin:0 auto; padding:0 24px 30px; font-size:11px; color:#6c707a; }
+</style>
+</head>
+<body>
+
+<!-- ============ START ============ -->
+<div class="scene active" id="scene-start">
+  <div>
+    <h1>Meet <span>Wi-Fi Wayne</span>.</h1>
+    <p class="tag">A 2.45 GHz story about routers, rats, and the bow-tie sent to investigate.</p>
+    <button class="bigbtn" onclick="goTo('scene-story1')">▶ Start</button>
+  </div>
+</div>
+
+<!-- ============ STORY 1 ============ -->
+<div class="scene" id="scene-story1">
+  <div class="story-wrap">
+    <div class="progress"><i class="done"></i><i></i><i></i></div>
+    <div class="emoji-big">📡</div>
+    <h2>Wayne is always talking.</h2>
+    <p class="lede">Your router (or phone, in your pocket) broadcasts 2.45 GHz Wi-Fi, all day, every day. Question: how close does Wayne usually get to your body?</p>
+    <div class="options" id="opts-1">
+      <button class="opt" onclick="reveal('story1', this)">In my pocket</button>
+      <button class="opt" onclick="reveal('story1', this)">On my desk, an arm's length away</button>
+      <button class="opt" onclick="reveal('story1', this)">Under my pillow (don't judge)</button>
+    </div>
+    <div class="reveal" id="reveal-story1">
+      <span class="tag">Reality Check</span>
+      Doesn't matter which you picked &mdash; modern life means near-continuous, body-proximate RF exposure. Phones in pockets, laptops on laps, routers indoors. Wayne doesn't respect personal space.
+    </div>
+    <button class="bigbtn continueBtn" id="cont-story1" onclick="goTo('scene-story2')">Continue →</button>
+  </div>
+</div>
+
+<!-- ============ STORY 2 ============ -->
+<div class="scene" id="scene-story2">
+  <div class="story-wrap">
+    <div class="progress"><i class="done"></i><i class="done"></i><i></i></div>
+    <div class="emoji-big">🐀</div>
+    <h2>Somewhere, a lab rat had a bad week.</h2>
+    <p class="lede">Researchers exposed rats to 2.45 GHz at close range (router-like power density) for a controlled time-course study. What do you think happened?</p>
+    <div class="options" id="opts-2">
+      <button class="opt" onclick="reveal('story2', this)">Nothing much, rats are fine</button>
+      <button class="opt" onclick="reveal('story2', this)">They got noticeably stronger</button>
+      <button class="opt" onclick="reveal('story2', this)">Sperm quality dropped, DNA damage rose</button>
+    </div>
+    <div class="reveal" id="reveal-story2">
+      <span class="tag">Reality Check</span>
+      Option 3 is what the literature actually found (Shokri et al., 2015): increased germ-cell apoptosis, and falling sperm count, motility &amp; viability, worsening the longer the exposure ran. Humans obviously can't ethically be tested the same way &mdash; the best we have is indirect, self-reported phone-use surveys.
+    </div>
+    <button class="bigbtn continueBtn" id="cont-story2" onclick="goTo('scene-story3')">Continue →</button>
+  </div>
+</div>
+
+<!-- ============ STORY 3 ============ -->
+<div class="scene" id="scene-story3">
+  <div class="story-wrap">
+    <div class="progress"><i class="done"></i><i class="done"></i><i class="done"></i></div>
+    <div class="emoji-big">🕵️</div>
+    <h2>So... what do we actually do about it?</h2>
+    <p class="lede">We can't ethically replicate the rat study on humans. So what's the move?</p>
+    <div class="options" id="opts-3">
+      <button class="opt" onclick="reveal('story3', this)">Irradiate volunteers and see what happens</button>
+      <button class="opt" onclick="reveal('story3', this)">Just keep asking people how many hours they use their phone</button>
+      <button class="opt" onclick="reveal('story3', this)">Build a sensor that measures the real dose, directly, on the body</button>
+    </div>
+    <div class="reveal" id="reveal-story3">
+      <span class="tag">The Mission</span>
+      Option 3. Ethics boards (rightly) veto direct-harm human testing, and "hours of phone use" is an indirect, confounded proxy with no measured field data behind it. The gap: harm is shown in animals, only inferred in humans. To close it, we need a flexible, wearable, 2.45 GHz-sensitive <b>antenna</b> that can sit near the body and measure exposure directly.
+      <br><br>
+      A flat, printable <b>bow-tie</b> is the natural shape for the job &mdash; wideband, easy to fabricate flat, small enough to disappear into a wearable patch. Now it's your turn to design one.
+    </div>
+    <button class="bigbtn continueBtn" id="cont-story3" onclick="goTo('scene-picker')">Choose your antenna →</button>
+  </div>
+</div>
+
+<!-- ============ PICKER ============ -->
+<div class="scene" id="scene-picker">
+  <div class="story-wrap">
+    <div class="emoji-big">🦋</div>
+    <h2>Pick your bow-tie</h2>
+    <p class="lede">Three shapes, three trade-offs. You can always come back and try another.</p>
+    <div class="cards">
+      <div class="card" onclick="selectAntenna('basic')">
+        <div class="icon">🎀</div>
+        <h3>Basic Bow-Tie</h3>
+        <p>The classic two-triangle planar antenna. Simple, wideband, easy to fabricate. Calibrated to real CST data.</p>
+      </div>
+      <div class="card" onclick="selectAntenna('yagi')">
+        <div class="icon">📶</div>
+        <h3>Bow-Tie Yagi-Uda</h3>
+        <p>A driven bow-tie flanked by a reflector and director. More directional, more coupling to tune.</p>
+      </div>
+      <div class="card" onclick="selectAntenna('fractal')">
+        <div class="icon">❄️</div>
+        <h3>Fractal Bow-Tie</h3>
+        <p>Notched, self-similar cutouts shrink the antenna electrically without shrinking it physically.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LAB ============ -->
+<div class="scene" id="scene-lab">
+  <div class="labhead">
+    <h2 id="labTitle">🎀 Basic Bow-Tie Tuning Lab</h2>
+    <button class="backbtn" onclick="goTo('scene-picker')">‹ Change design</button>
+  </div>
+
+  <div id="verdictWrap"><div class="banner cold" id="verdictBanner">Reading the tea leaves…</div></div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Resonant f₀ (est.)</div><div class="v" id="statF0">—</div></div>
+    <div class="stat"><div class="k">S11 @ 2.45 GHz</div><div class="v" id="statS11">—</div></div>
+    <div class="stat"><div class="k">Approx. bandwidth</div><div class="v" id="statBW">—</div></div>
+  </div>
+
+  <main class="lab">
+    <div class="col">
+      <div id="viewer3d"></div>
+      <div id="chartWrap"><canvas id="s11Chart"></canvas></div>
+    </div>
+    <div class="col">
+      <div class="arena-box">
+        <h4>🏃 Run the arena to shape the antenna</h4>
+        <p class="sub">The floor glows with how good S11 would be at each spot. Find the <b>green dot</b> — that's today's best match.</p>
+        <div class="arena-stage">
+          <div class="axislabel top" id="lblTop">top</div>
+          <div class="axislabel bottom" id="lblBottom">bottom</div>
+          <div class="axislabel left" id="lblLeft">left</div>
+          <div class="axislabel right" id="lblRight">right</div>
+          <canvas id="arena3d" tabindex="0"></canvas>
+        </div>
+        <p class="arena-hint">Click the box, then use ← ↑ → ↓ to move. Stand on the <b>green dot</b> to win.</p>
+        <div class="arena-hud">
+          <span id="hudX">X: —</span>
+          <span id="hudZ">Z: —</span>
+        </div>
+      </div>
+
+      <div class="dials" id="dialsWrap"></div>
+    </div>
+  </main>
+
+  <footer class="labfoot">
+    <b>Basic bow-tie:</b> resonance/edge-resistance interpolated from CST-simulated data at r=50mm, α=40°/80°/120°/160° (Smith &amp; Lim, 2024, Table 1) with their validated f₀∝1/r scaling. <b>Yagi-Uda &amp; fractal variants</b> layer qualitative, illustrative coupling/miniaturization trends on top of that base model (not individually literature-calibrated) &mdash; useful for exploring trends, not for final numbers. The arena heatmap/green-dot is computed from this same model, so it inherits the same accuracy caveat. Verify any real design in CST.
+  </footer>
+</div>
+
+<script>
+// ============================================================
+// Scene management
+// ============================================================
+let currentScene = 'scene-start';
+function goTo(id){
+  document.getElementById(currentScene).classList.remove('active');
+  document.getElementById(id).classList.add('active');
+  currentScene = id;
+  window.scrollTo(0,0);
+}
+function reveal(pageId, btn){
+  const opts = document.getElementById('opts-' + pageId.replace('story',''));
+  [...opts.children].forEach(b => b.disabled = true);
+  document.getElementById('reveal-'+pageId).classList.add('show');
+  document.getElementById('cont-'+pageId).classList.add('show');
+}
+
+// ============================================================
+// Shared bow-tie core model (calibrated) + curve builder
+// ============================================================
+const TARGET_GHZ = 2.45;
+const CAL = {
+  alphaDeg: [40, 80, 120, 160],
+  f0GHz_at_r50: [1.16, 1.18, 1.36, 1.72],
+  Rin: [56.7, 41.2, 18.4, 4.1],
+  Q_anchor_alpha: [40, 80],
+  Q_anchor: [1/0.20, 1/0.22]
+};
+function lerpTable(x, xs, ys){
+  if (x <= xs[0]) return ys[0] + (ys[1]-ys[0]) * (x-xs[0])/(xs[1]-xs[0]);
+  for (let i = 0; i < xs.length-1; i++){
+    if (x >= xs[i] && x <= xs[i+1]){
+      const t = (x - xs[i]) / (xs[i+1]-xs[i]);
+      return ys[i] + t*(ys[i+1]-ys[i]);
+    }
+  }
+  const n = xs.length;
+  return ys[n-2] + (ys[n-1]-ys[n-2]) * (x-xs[n-2])/(xs[n-1]-xs[n-2]);
+}
+function estimateQ(alphaDeg){
+  const [a0,a1] = CAL.Q_anchor_alpha, [q0,q1] = CAL.Q_anchor;
+  const slope = (q1-q0)/(a1-a0);
+  return Math.max(q0 + slope*(alphaDeg - a0), 2.0);
+}
+function computeCoreBowtie(alphaDeg, r_mm, epsr){
+  const f0_bare_r50 = lerpTable(alphaDeg, CAL.alphaDeg, CAL.f0GHz_at_r50);
+  const Rin = lerpTable(alphaDeg, CAL.alphaDeg, CAL.Rin);
+  const Q = estimateQ(alphaDeg);
+  const f0_bare = f0_bare_r50 * (50 / r_mm);
+  const epsEff = (epsr + 1) / 2;
+  const f0GHz = f0_bare / Math.sqrt(epsEff);
+  return { f0GHz, Rin, Q };
+}
+const YAGI_ALPHA = 70;
+const FRACTAL_ALPHA = 90;
+
+function antennaParams(type, xVal, zVal, epsr){
+  if(type==='basic'){
+    return computeCoreBowtie(zVal, xVal, epsr); // zVal=alphaDeg, xVal=r_mm
+  }
+  if(type==='yagi'){
+    const core = computeCoreBowtie(YAGI_ALPHA, xVal, epsr);
+    const spacingNorm = clamp((zVal-10)/(50-10),0,1);
+    const couplingNorm = 1 - spacingNorm;
+    return {
+      f0GHz: core.f0GHz * (1 - 0.05*couplingNorm),
+      Rin: core.Rin * (0.5 + 0.5*(1-couplingNorm)),
+      Q: core.Q * (1 + 0.3*couplingNorm)
+    };
+  }
+  const core = computeCoreBowtie(FRACTAL_ALPHA, xVal, epsr);
+  const iterN = Math.round(zVal);
+  return {
+    f0GHz: core.f0GHz * (1 - 0.10*iterN),
+    Rin: core.Rin * (1 - 0.05*iterN),
+    Q: core.Q * (1 + 0.2*iterN)
+  };
+}
+function s11dBAt(f0GHz, Rin, Q, Z0, freqGHz){
+  const f0 = f0GHz*1e9, fHz = freqGHz*1e9;
+  const im = Q * (fHz/f0 - f0/fHz);
+  const d = 1 + im*im;
+  const zRe = Rin/d, zIm = -Rin*im/d;
+  const nRe=zRe-Z0, nIm=zIm, dRe=zRe+Z0, dIm=zIm;
+  const g = Math.sqrt((nRe*nRe+nIm*nIm)/(dRe*dRe+dIm*dIm));
+  return 20*Math.log10(Math.max(g,1e-6));
+}
+function quickS11(type, xVal, zVal, epsr, Z0){
+  const p = antennaParams(type, xVal, zVal, epsr);
+  return s11dBAt(p.f0GHz, p.Rin, p.Q, Z0, TARGET_GHZ);
+}
+function computeAntenna(state){
+  const map = ARENA_MAP[state.type];
+  const p = antennaParams(state.type, state[map.x.key], state[map.z.key], state.epsr);
+  const f0 = p.f0GHz*1e9;
+  const span = f0*0.9, nPts = 220;
+  const freqs=[], s11=[];
+  for(let i=0;i<=nPts;i++){
+    const fHz = Math.max(f0-span/2, 0.1e9) + span*i/nPts;
+    freqs.push(fHz/1e9);
+    s11.push(s11dBAt(p.f0GHz, p.Rin, p.Q, state.Z0, fHz/1e9));
+  }
+  let bwLow=null, bwHigh=null;
+  for(let i=0;i<s11.length;i++){ if(s11[i]<=-10){ if(bwLow===null) bwLow=freqs[i]; bwHigh=freqs[i]; } }
+  const bwMHz = bwLow!==null ? (bwHigh-bwLow)*1000 : 0;
+  return { f0GHz:p.f0GHz, Rin:p.Rin, Q:p.Q, freqs, s11, s11AtTarget: s11dBAt(p.f0GHz,p.Rin,p.Q,state.Z0,TARGET_GHZ), bwMHz };
+}
+
+// ============================================================
+// Arena parameter mapping
+// ============================================================
+const ARENA_MAP = {
+  basic:   { x:{key:'r_mm', min:15, max:100, label:'Flare radius r', unit:'mm', dec:1, lo:'small', hi:'large'},
+             z:{key:'alphaDeg', min:40, max:160, label:'Flare angle α', unit:'°', dec:0, lo:'narrow', hi:'wide'} },
+  yagi:    { x:{key:'r_mm', min:15, max:100, label:'Driven radius r', unit:'mm', dec:1, lo:'small', hi:'large'},
+             z:{key:'spacing_mm', min:10, max:50, label:'Element spacing', unit:'mm', dec:1, lo:'tight', hi:'loose'} },
+  fractal: { x:{key:'r_mm', min:15, max:100, label:'Flare radius r', unit:'mm', dec:1, lo:'small', hi:'large'},
+             z:{key:'iteration', min:0, max:3, label:'Fractal iteration', unit:'', dec:2, lo:'plain', hi:'deep fractal'} }
+};
+const DEFAULTS = {
+  basic:   { r_mm:21, alphaDeg:90, epsr:1.45, h_mm:0.2, gap_mm:1, Z0:50 },
+  yagi:    { r_mm:21, spacing_mm:24, epsr:1.45, h_mm:0.2, gap_mm:1, Z0:50 },
+  fractal: { r_mm:30, iteration:1, epsr:1.45, h_mm:0.2, gap_mm:1, Z0:50 }
+};
+const TITLES = { basic:'🎀 Basic Bow-Tie Tuning Lab', yagi:'📶 Bow-Tie Yagi-Uda Tuning Lab', fractal:'❄️ Fractal Bow-Tie Tuning Lab' };
+
+const state = { type:'basic' };
+const ARENA_HALF = 38;
+let charPos = { x:0, z:0 };
+let lastResult = null;
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+// ============================================================
+// Rotary dial control
+// ============================================================
+function createDial(container, opts){
+  const el = document.createElement('div');
+  el.className = 'dialUnit';
+  el.innerHTML = `<div class="dial" style="--dc:${opts.color}"><div class="pointer"></div></div>
+    <div class="dlabel">${opts.label}</div><div class="dval"></div>`;
+  container.appendChild(el);
+  const dial = el.querySelector('.dial');
+  const valEl = el.querySelector('.dval');
+  let value = opts.value;
+
+  function render(){
+    const pct = (value - opts.min) / (opts.max - opts.min) * 100;
+    dial.style.setProperty('--pct', pct.toFixed(2));
+    valEl.textContent = value.toFixed(opts.decimals) + opts.unit;
+  }
+  function setFromAngleEvent(evt){
+    const rect = dial.getBoundingClientRect();
+    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+    const dx = evt.clientX - cx, dy = evt.clientY - cy;
+    let angle = Math.atan2(dx, -dy) * 180/Math.PI;
+    if(angle < 0) angle += 360;
+    let v = opts.min + (angle/360) * (opts.max - opts.min);
+    v = clamp(v, opts.min, opts.max);
+    if(opts.step) v = Math.round(v/opts.step)*opts.step;
+    value = v;
+    render();
+    opts.onChange(value);
+  }
+  let dragging = false;
+  dial.addEventListener('pointerdown', e => { dragging = true; dial.setPointerCapture(e.pointerId); setFromAngleEvent(e); });
+  dial.addEventListener('pointermove', e => { if(dragging) setFromAngleEvent(e); });
+  dial.addEventListener('pointerup', () => dragging = false);
+
+  render();
+  return { setValue(v){ value = v; render(); } };
+}
+
+const dialsWrap = document.getElementById('dialsWrap');
+dialsWrap.innerHTML = '';
+const dialEpsr = createDial(dialsWrap, { label:'Substrate εr', min:1, max:4.4, step:0.05, value:1.45, decimals:2, unit:'', color:'#ff8a5b',
+  onChange:v=>{ state.epsr=v; onSecondaryChange(); } });
+const dialH = createDial(dialsWrap, { label:'Thickness', min:0.05, max:3, step:0.01, value:0.2, decimals:2, unit:'mm', color:'#5b9dff',
+  onChange:v=>{ state.h_mm=v; onSecondaryChange(); } });
+const dialGap = createDial(dialsWrap, { label:'Feed gap', min:0.2, max:6, step:0.1, value:1, decimals:1, unit:'mm', color:'#c792ea',
+  onChange:v=>{ state.gap_mm=v; onSecondaryChange(); } });
+const dialZ0 = createDial(dialsWrap, { label:'Feed Z₀', min:30, max:90, step:1, value:50, decimals:0, unit:'Ω', color:'#6ee680',
+  onChange:v=>{ state.Z0=v; onSecondaryChange(); } });
+
+function onSecondaryChange(){
+  recomputeHeatmap();
+  updateLab();
+}
+
+function selectAntenna(type){
+  state.type = type;
+  Object.assign(state, DEFAULTS[type]);
+  document.getElementById('labTitle').textContent = TITLES[type];
+
+  dialEpsr.setValue(state.epsr);
+  dialH.setValue(state.h_mm);
+  dialGap.setValue(state.gap_mm);
+  dialZ0.setValue(state.Z0);
+
+  const map = ARENA_MAP[type];
+  const xNorm = (state[map.x.key]-map.x.min)/(map.x.max-map.x.min)*2-1;
+  const zNorm = (state[map.z.key]-map.z.min)/(map.z.max-map.z.min)*2-1;
+  charPos.x = xNorm*ARENA_HALF;
+  charPos.z = zNorm*ARENA_HALF;
+
+  document.getElementById('lblLeft').textContent = map.x.lo;
+  document.getElementById('lblRight').textContent = map.x.hi;
+  document.getElementById('lblTop').textContent = map.z.hi;
+  document.getElementById('lblBottom').textContent = map.z.lo;
+
+  goTo('scene-lab');
+  recomputeHeatmap();
+  updateLab();
+}
+
+function onArenaMove(xNorm, zNorm){
+  const map = ARENA_MAP[state.type];
+  state[map.x.key] = lerp(map.x.min, map.x.max, (xNorm+1)/2);
+  state[map.z.key] = lerp(map.z.min, map.z.max, (zNorm+1)/2);
+  updateLab();
+}
+
+function keyLabel(map, key){
+  return `${map[key].label}: ${state[map[key].key].toFixed(map[key].dec)}${map[key].unit}`;
+}
+
+// ============================================================
+// Chart.js
+// ============================================================
+const ctx = document.getElementById('s11Chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type:'line',
+  data:{ labels:[], datasets:[{ label:'S11 (dB)', data:[], borderColor:'#ff8a5b', borderWidth:2, pointRadius:0, tension:.15 }] },
+  options:{
+    responsive:true, maintainAspectRatio:false, animation:false,
+    scales:{
+      x:{ title:{display:true,text:'Frequency (GHz)',color:'#9a9ea8'}, ticks:{color:'#9a9ea8',maxTicksLimit:7}, grid:{color:'#22252d'} },
+      y:{ title:{display:true,text:'S11 (dB)',color:'#9a9ea8'}, min:-35, max:0, ticks:{color:'#9a9ea8'}, grid:{color:'#22252d'} }
+    },
+    plugins:{ legend:{display:false} }
+  }
+});
+
+// ============================================================
+// Colour scale (shared by heatmap + antenna glow + pulses)
+// ============================================================
+const cBad = new THREE.Color(0xff5a5a), cMid = new THREE.Color(0xffd666), cGood = new THREE.Color(0x33ff66);
+function qualityColor(s11dB){
+  const t = clamp((-s11dB)/25, 0, 1);
+  const c = new THREE.Color();
+  if(t < 0.5) c.lerpColors(cBad, cMid, t/0.5);
+  else c.lerpColors(cMid, cGood, (t-0.5)/0.5);
+  return c;
+}
+
+// ============================================================
+// Main 3D viewer (antenna) + Wayne + RF pulses
+// ============================================================
+const viewerEl = document.getElementById('viewer3d');
+const scene3 = new THREE.Scene();
+scene3.background = new THREE.Color(0x12141a);
+const cam3 = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+cam3.position.set(20, 70, 150);
+cam3.lookAt(0, 0, 0);
+const renderer3 = new THREE.WebGLRenderer({antialias:true});
+viewerEl.appendChild(renderer3.domElement);
+const orbit3 = new THREE.OrbitControls(cam3, renderer3.domElement);
+orbit3.target.set(0,0,0);
+orbit3.enableDamping = true;
+scene3.add(new THREE.AmbientLight(0xffffff,0.75));
+const dl3 = new THREE.DirectionalLight(0xffffff,0.6); dl3.position.set(60,100,60); scene3.add(dl3);
+scene3.add(new THREE.GridHelper(260,26,0x333844,0x22252d));
+const antGrp = new THREE.Group();
+scene3.add(antGrp);
+
+// Wayne the router, sitting off to the side, forever pinging the antenna
+const wayneGrp = new THREE.Group();
+const dish = new THREE.Mesh(new THREE.SphereGeometry(9,14,14,0,Math.PI), new THREE.MeshStandardMaterial({color:0xcfd3da, side:THREE.DoubleSide, roughness:0.4}));
+dish.rotation.z = Math.PI/2; dish.rotation.y = Math.PI/2; wayneGrp.add(dish);
+const wayneStand = new THREE.Mesh(new THREE.CylinderGeometry(2,2.6,18,8), new THREE.MeshStandardMaterial({color:0x555b66}));
+wayneStand.position.set(0,-13,0); wayneGrp.add(wayneStand);
+wayneGrp.position.set(130, 22, 0);
+scene3.add(wayneGrp);
+
+let pulseRings = [];
+let lastPulseSpawn = 0;
+function spawnPulse(){
+  const col = lastResult ? qualityColor(lastResult.s11AtTarget) : new THREE.Color(0xffd666);
+  const mat = new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:0.85, side:THREE.DoubleSide});
+  const geo = new THREE.RingGeometry(5,7,28);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.y = Math.PI/2;
+  mesh.position.set(wayneGrp.position.x - 14, 16, 0);
+  scene3.add(mesh);
+  pulseRings.push({ mesh, born: performance.now() });
+}
+function updatePulses(now){
+  if(now - lastPulseSpawn > 650){ lastPulseSpawn = now; spawnPulse(); }
+  pulseRings.forEach(p => {
+    const age = (now - p.born)/1000;
+    const travel = Math.min(age/1.3, 1);
+    p.mesh.position.x = lerp(wayneGrp.position.x - 14, 6, travel);
+    p.mesh.material.opacity = Math.max(0.85*(1-travel), 0);
+    p.mesh.scale.setScalar(1 + travel*0.7);
+  });
+  pulseRings = pulseRings.filter(p => {
+    const age = (now - p.born)/1000;
+    if(age > 1.4){ scene3.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); return false; }
+    return true;
+  });
+}
+
+function resizeViewer(){
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  cam3.aspect = w/h; cam3.updateProjectionMatrix();
+  renderer3.setSize(w,h);
+}
+
+function wedgeShape(alphaRad, r){
+  const half = alphaRad/2;
+  const shape = new THREE.Shape();
+  shape.moveTo(0,0);
+  const nSeg = 40;
+  for(let i=0;i<=nSeg;i++){
+    const a = -half + (2*half)*(i/nSeg) + Math.PI/2;
+    shape.lineTo(r*Math.cos(a), r*Math.sin(a));
+  }
+  shape.lineTo(0,0);
+  return shape;
+}
+function wedgeShapeFractal(alphaRad, r, iterN){
+  const shape = wedgeShape(alphaRad, r);
+  for(let i=1;i<=iterN;i++){
+    const frac = i/(iterN+1);
+    const dCenter = r*(0.25+0.5*frac);
+    const size = r*0.16/i;
+    const hole = new THREE.Path();
+    hole.moveTo(-size, dCenter-size);
+    hole.lineTo(size, dCenter-size);
+    hole.lineTo(0, dCenter+size);
+    hole.lineTo(-size, dCenter-size);
+    shape.holes.push(hole);
+  }
+  return shape;
+}
+function buildBowtiePair(r_mm, alphaDeg, gap_mm, withFeed, shapeFn, glowColor){
+  const grp = new THREE.Group();
+  const alphaRad = alphaDeg*Math.PI/180;
+  const thick = 0.05, halfGap = gap_mm/2;
+  const shape = shapeFn(alphaRad, r_mm);
+  const geo = new THREE.ExtrudeGeometry(shape, {depth:thick, bevelEnabled:false});
+  geo.rotateX(-Math.PI/2);
+  const matOpts = {color:0xd4924a, metalness:0.55, roughness:0.35};
+  if(glowColor){ matOpts.emissive = glowColor; matOpts.emissiveIntensity = 0.55; }
+  const mat = new THREE.MeshStandardMaterial(matOpts);
+  const top = new THREE.Mesh(geo, mat); top.position.z = halfGap; grp.add(top);
+  const bot = new THREE.Mesh(geo.clone(), mat); bot.rotation.y = Math.PI; bot.position.z = -halfGap; grp.add(bot);
+  if(withFeed){
+    const fg = new THREE.CylinderGeometry(0.9,0.9,1+thick*2,14);
+    const fm = new THREE.MeshStandardMaterial({color:0xffe066});
+    const f1 = new THREE.Mesh(fg, fm); f1.position.set(0,0,halfGap); grp.add(f1);
+    const f2 = new THREE.Mesh(fg.clone(), fm); f2.position.set(0,0,-halfGap); grp.add(f2);
+  }
+  return grp;
+}
+
+function rebuild3D(result){
+  antGrp.clear();
+  const glow = qualityColor(result.s11AtTarget);
+  if(state.type==='basic'){
+    const subSize = state.r_mm*2.4;
+    const subGeo = new THREE.BoxGeometry(subSize, state.h_mm, subSize);
+    const subMat = new THREE.MeshStandardMaterial({color:0x2f4a6b, transparent:true, opacity:0.5, roughness:0.8});
+    const sub = new THREE.Mesh(subGeo, subMat); sub.position.y = -state.h_mm/2-0.03; antGrp.add(sub);
+    antGrp.add(buildBowtiePair(state.r_mm, state.alphaDeg, state.gap_mm, true, wedgeShape, glow));
+  } else if(state.type==='yagi'){
+    const driven = buildBowtiePair(state.r_mm, YAGI_ALPHA, state.gap_mm, true, wedgeShape, glow);
+    const reflector = buildBowtiePair(state.r_mm*1.05, YAGI_ALPHA, 1, false, wedgeShape);
+    const director = buildBowtiePair(state.r_mm*0.95, YAGI_ALPHA, 1, false, wedgeShape);
+    driven.rotation.y = Math.PI/2; reflector.rotation.y = Math.PI/2; director.rotation.y = Math.PI/2;
+    driven.position.x = 0;
+    reflector.position.x = -state.spacing_mm;
+    director.position.x = state.spacing_mm;
+    antGrp.add(driven, reflector, director);
+    const boomGeo = new THREE.CylinderGeometry(0.5,0.5, state.spacing_mm*2+10, 10);
+    const boomMat = new THREE.MeshStandardMaterial({color:0x555b66});
+    const boom = new THREE.Mesh(boomGeo, boomMat);
+    boom.rotation.z = Math.PI/2; antGrp.add(boom);
+  } else {
+    const iterN = Math.round(state.iteration);
+    const subSize = state.r_mm*2.4;
+    const subGeo = new THREE.BoxGeometry(subSize, state.h_mm, subSize);
+    const subMat = new THREE.MeshStandardMaterial({color:0x2f4a6b, transparent:true, opacity:0.5, roughness:0.8});
+    const sub = new THREE.Mesh(subGeo, subMat); sub.position.y = -state.h_mm/2-0.03; antGrp.add(sub);
+    const shapeFn = (aRad, r) => wedgeShapeFractal(aRad, r, iterN);
+    antGrp.add(buildBowtiePair(state.r_mm, FRACTAL_ALPHA, state.gap_mm, true, shapeFn, glow));
+  }
+}
+
+// ============================================================
+// Arena scene: heatmap floor + green optimum marker + runner
+// ============================================================
+const arenaCanvas = document.getElementById('arena3d');
+const sceneA = new THREE.Scene();
+sceneA.background = new THREE.Color(0x0d0f14);
+const camA = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+camA.position.set(0, 78, 62);
+camA.lookAt(0,0,0);
+const rendererA = new THREE.WebGLRenderer({canvas:arenaCanvas, antialias:true});
+rendererA.setSize(280,280);
+sceneA.add(new THREE.AmbientLight(0xffffff,0.8));
+const dlA = new THREE.DirectionalLight(0xffffff,0.5); dlA.position.set(40,80,40); sceneA.add(dlA);
+
+const floorGeo = new THREE.PlaneGeometry(ARENA_HALF*2, ARENA_HALF*2);
+const floorMat = new THREE.MeshStandardMaterial({color:0x181c26});
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI/2; sceneA.add(floor);
+
+const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(ARENA_HALF*2, 6, ARENA_HALF*2));
+const borderMat = new THREE.LineBasicMaterial({color:0xff8a5b});
+const border = new THREE.LineSegments(borderGeo, borderMat);
+border.position.y = 3; sceneA.add(border);
+
+// heatmap mesh (vertex-coloured grid)
+const HEAT_N = 22;
+function buildHeatmapGeometry(){
+  const geo = new THREE.BufferGeometry();
+  const positions = [], colors = [], indices = [];
+  for(let j=0;j<=HEAT_N;j++){
+    for(let i=0;i<=HEAT_N;i++){
+      const x = -ARENA_HALF + (2*ARENA_HALF)*(i/HEAT_N);
+      const z = -ARENA_HALF + (2*ARENA_HALF)*(j/HEAT_N);
+      positions.push(x, 0, z);
+      colors.push(0.5,0.5,0.5);
+    }
+  }
+  for(let j=0;j<HEAT_N;j++){
+    for(let i=0;i<HEAT_N;i++){
+      const a = j*(HEAT_N+1)+i, b = a+1, c = a+(HEAT_N+1), d = c+1;
+      indices.push(a,c,b, b,c,d);
+    }
+  }
+  geo.setIndex(indices);
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors,3));
+  return geo;
+}
+const heatGeo = buildHeatmapGeometry();
+const heatMat = new THREE.MeshBasicMaterial({vertexColors:true, transparent:true, opacity:0.88, side:THREE.DoubleSide});
+const heatMesh = new THREE.Mesh(heatGeo, heatMat);
+heatMesh.position.y = 0.05;
+sceneA.add(heatMesh);
+
+// green optimum marker
+const targetMarker = new THREE.Group();
+const dot = new THREE.Mesh(new THREE.SphereGeometry(2.4,16,16), new THREE.MeshBasicMaterial({color:0x33ff66}));
+targetMarker.add(dot);
+const ring = new THREE.Mesh(new THREE.RingGeometry(3.2,4.6,32), new THREE.MeshBasicMaterial({color:0x33ff66, side:THREE.DoubleSide, transparent:true, opacity:0.6}));
+ring.rotation.x = -Math.PI/2; ring.position.y = -1.1; targetMarker.add(ring);
+sceneA.add(targetMarker);
+
+function recomputeHeatmap(){
+  const map = ARENA_MAP[state.type];
+  const posAttr = heatGeo.attributes.position;
+  const colorAttr = heatGeo.attributes.color;
+  let best = -Infinity, bestX = 0, bestZ = 0;
+  for(let j=0;j<=HEAT_N;j++){
+    for(let i=0;i<=HEAT_N;i++){
+      const idx = j*(HEAT_N+1)+i;
+      const x = posAttr.getX(idx), z = posAttr.getZ(idx);
+      const xVal = lerp(map.x.min, map.x.max, (x/ARENA_HALF+1)/2);
+      const zVal = lerp(map.z.min, map.z.max, (z/ARENA_HALF+1)/2);
+      const s11 = quickS11(state.type, xVal, zVal, state.epsr, state.Z0);
+      const col = qualityColor(s11);
+      colorAttr.setXYZ(idx, col.r, col.g, col.b);
+      if(-s11 > best){ best = -s11; bestX = x; bestZ = z; }
+    }
+  }
+  colorAttr.needsUpdate = true;
+  targetMarker.position.x = bestX;
+  targetMarker.position.z = bestZ;
+}
+
+// simple blocky runner
+const charGroup = new THREE.Group();
+const torsoMat = new THREE.MeshStandardMaterial({color:0x5b9dff});
+const torso = new THREE.Mesh(new THREE.BoxGeometry(4,7,2.6), torsoMat);
+torso.position.y = 8; charGroup.add(torso);
+const headMat = new THREE.MeshStandardMaterial({color:0xffd9b3});
+const head = new THREE.Mesh(new THREE.SphereGeometry(2.4,14,14), headMat);
+head.position.y = 13; charGroup.add(head);
+const limbMat = new THREE.MeshStandardMaterial({color:0x2f3a4a});
+function makeLimb(len){
+  const geo = new THREE.CylinderGeometry(0.9,0.9,len,10);
+  geo.translate(0,-len/2,0);
+  return new THREE.Mesh(geo, limbMat);
+}
+const legL = makeLimb(7); legL.position.set(-1.3,4.5,0); charGroup.add(legL);
+const legR = makeLimb(7); legR.position.set(1.3,4.5,0); charGroup.add(legR);
+const armL = makeLimb(6); armL.position.set(-2.6,10.8,0); charGroup.add(armL);
+const armR = makeLimb(6); armR.position.set(2.6,10.8,0); charGroup.add(armR);
+sceneA.add(charGroup);
+
+let controlActive = false;
+arenaCanvas.addEventListener('focus', () => controlActive = true);
+arenaCanvas.addEventListener('blur', () => controlActive = false);
+arenaCanvas.addEventListener('click', () => arenaCanvas.focus());
+
+const keys = { ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false };
+document.addEventListener('keydown', e => {
+  if(!controlActive) return;
+  if(e.key in keys){ keys[e.key] = true; e.preventDefault(); }
+});
+document.addEventListener('keyup', e => { if(e.key in keys) keys[e.key] = false; });
+
+const SPEED = 42;
+let runPhase = 0;
+let updateAccum = 0;
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const now = performance.now();
+
+  if(currentScene === 'scene-lab'){
+    let vx = 0, vz = 0;
+    if(keys.ArrowLeft) vx -= 1;
+    if(keys.ArrowRight) vx += 1;
+    if(keys.ArrowUp) vz -= 1;
+    if(keys.ArrowDown) vz += 1;
+    const moving = (vx!==0 || vz!==0);
+    if(moving){
+      const len = Math.hypot(vx,vz); vx/=len; vz/=len;
+      charPos.x = clamp(charPos.x + vx*SPEED*dt, -ARENA_HALF+3, ARENA_HALF-3);
+      charPos.z = clamp(charPos.z + vz*SPEED*dt, -ARENA_HALF+3, ARENA_HALF-3);
+      charGroup.rotation.y = Math.atan2(vx, vz);
+      runPhase += dt*12;
+    }
+    charGroup.position.set(charPos.x, 0, charPos.z);
+    const swing = moving ? Math.sin(runPhase)*0.8 : 0;
+    legL.rotation.x = swing; legR.rotation.x = -swing;
+    armL.rotation.x = -swing*0.8; armR.rotation.x = swing*0.8;
+
+    updateAccum += dt;
+    if(updateAccum > 0.09){
+      updateAccum = 0;
+      onArenaMove(charPos.x/ARENA_HALF, charPos.z/ARENA_HALF);
+    }
+
+    const pulse = 1 + 0.22*Math.sin(now*0.004);
+    ring.scale.setScalar(pulse);
+    dot.position.y = 1 + 0.4*Math.sin(now*0.005);
+
+    updatePulses(now);
+    resizeViewer();
+    orbit3.update();
+    renderer3.render(scene3, cam3);
+    rendererA.render(sceneA, camA);
+  }
+}
+animate();
+
+// ============================================================
+// Verdict + master update
+// ============================================================
+function verdictCopy(result){
+  const df = result.f0GHz - TARGET_GHZ;
+  const s11 = result.s11AtTarget;
+  if(s11 <= -15) return { cls:'win', text:`🏆 Nailed it. S11 = ${s11.toFixed(1)} dB at 2.45 GHz — Wayne's signal walks straight in. Ship it.` };
+  if(s11 <= -10) return { cls:'win', text:`✅ Matched! S11 = ${s11.toFixed(1)} dB at 2.45 GHz — solid design. The green dot is close by if you want to push deeper.` };
+  if(Math.abs(df) > 0.15) return { cls:'cold', text:`🥶 Off-target: resonating at ${result.f0GHz.toFixed(2)} GHz (need 2.45). Follow the heatmap toward the brighter green tiles.` };
+  return { cls:'warm', text:`🌤️ Close on frequency (f₀ = ${result.f0GHz.toFixed(2)} GHz) but S11 is only ${s11.toFixed(1)} dB — head for the green dot to fix the impedance match.` };
+}
+
+function updateLab(){
+  const result = computeAntenna(state);
+  lastResult = result;
+  rebuild3D(result);
+
+  chart.data.labels = result.freqs.map(f => f.toFixed(3));
+  chart.data.datasets[0].data = result.s11;
+  chart.update('none');
+
+  document.getElementById('statF0').textContent = result.f0GHz.toFixed(3) + ' GHz';
+  const s11El = document.getElementById('statS11');
+  s11El.textContent = result.s11AtTarget.toFixed(1) + ' dB';
+  s11El.className = 'v ' + (result.s11AtTarget <= -10 ? 'good' : 'bad');
+  document.getElementById('statBW').textContent = result.bwMHz > 0 ? result.bwMHz.toFixed(0) + ' MHz' : '< -10dB not reached';
+
+  const v = verdictCopy(result);
+  const banner = document.getElementById('verdictBanner');
+  banner.className = 'banner ' + v.cls;
+  banner.textContent = v.text;
+
+  const map = ARENA_MAP[state.type];
+  document.getElementById('hudX').textContent = keyLabel(map, 'x');
+  document.getElementById('hudZ').textContent = keyLabel(map, 'z');
+}
+
+window.addEventListener('resize', resizeViewer);
+</script>
+</body>
+</html>
