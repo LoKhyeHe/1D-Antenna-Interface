@@ -859,15 +859,14 @@ function resizeViewer(){
 }
 
 function wedgeShape(alphaRad, r){
+  // true bow-tie wing: a straight-edged triangle (apex at feed, flat outer base)
   const half = alphaRad/2;
+  const a1 = Math.PI/2 - half, a2 = Math.PI/2 + half;
   const shape = new THREE.Shape();
-  shape.moveTo(0,0);
-  const nSeg = 40;
-  for(let i=0;i<=nSeg;i++){
-    const a = -half + (2*half)*(i/nSeg) + Math.PI/2;
-    shape.lineTo(r*Math.cos(a), r*Math.sin(a));
-  }
-  shape.lineTo(0,0);
+  shape.moveTo(0, 0);
+  shape.lineTo(r*Math.cos(a1), r*Math.sin(a1));
+  shape.lineTo(r*Math.cos(a2), r*Math.sin(a2));
+  shape.lineTo(0, 0);
   return shape;
 }
 // ---- Conductor pattern shapes (holes cut into the wedge, apex at origin, arc toward +Y) ----
@@ -932,6 +931,7 @@ function buildBowtiePair(r_mm, alphaDeg, gap_mm, withFeed, shapeFn, glowColor){
     const f1 = new THREE.Mesh(fg, fm); f1.position.set(0,0,halfGap); grp.add(f1);
     const f2 = new THREE.Mesh(fg.clone(), fm); f2.position.set(0,0,-halfGap); grp.add(f2);
   }
+  grp.rotation.y = Math.PI/2; // orient the bow-tie 90° (wings along X, feed line along Z)
   return grp;
 }
 
